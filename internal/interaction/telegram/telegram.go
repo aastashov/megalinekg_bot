@@ -156,8 +156,6 @@ func (that *Connector) handlerBalance(ctx context.Context, bot *telegramBot.Bot,
 	log := that.logger.With("method", "handlerBalance", "user_id", update.Message.From.ID)
 
 	if err := that.useCase.UpdateBalance(ctx, update.Message.From.ID); err != nil {
-		log.Error("Error updating balance", "error", err)
-
 		_, err = bot.SendMessage(ctx, &telegramBot.SendMessageParams{
 			ChatID: update.Message.Chat.ID,
 			Text:   "Произошла ошибка при получении баланса. Попробуйте позже.",

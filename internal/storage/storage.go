@@ -4,15 +4,18 @@ import (
 	"fmt"
 	"log/slog"
 
+	slogGorm "github.com/orandin/slog-gorm"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-
-	slogGorm "github.com/orandin/slog-gorm"
 
 	"github.com/aastashov/megalinekg_bot/internal/model"
 )
 
-func NewPostgresDB(logger *slog.Logger, logLevel slog.Level, connectionString string) (*gorm.DB, error) {
+type Storage struct {
+	DB *gorm.DB
+}
+
+func MustNewPostgresDB(logger *slog.Logger, logLevel slog.Level, connectionString string) *Storage {
 	gormLogger := slogGorm.New(
 		slogGorm.WithHandler(logger.Handler()),
 		slogGorm.WithTraceAll(),
@@ -23,21 +26,30 @@ func NewPostgresDB(logger *slog.Logger, logLevel slog.Level, connectionString st
 
 	db, err := gorm.Open(postgres.Open(connectionString), &gorm.Config{Logger: gormLogger})
 	if err != nil {
-		return nil, fmt.Errorf("open connection: %w", err)
+		panic(fmt.Errorf("open connection: %w", err))
 	}
 
-	return db, nil
+	return &Storage{DB: db}
 }
 
-func Migration(db *gorm.DB) error {
-	err := db.AutoMigrate(
+func (s *Storage) MustClose() {
+	connection, err := s.DB.DB()
+	if err != nil {
+		panic(fmt.Errorf("get db connection: %w", err))
+	}
+
+	if err = connection.Close(); err != nil {
+		panic(fmt.Errorf("close connection: %w", err))
+	}
+}
+
+func (s *Storage) MustMigration() {
+	err := s.DB.AutoMigrate(
 		model.User{},
 		model.Account{},
 	)
 
 	if err != nil {
-		return fmt.Errorf("migrate models: %w", err)
+		panic(fmt.Errorf("migrate models: %w", err))
 	}
-
-	return nil
 }

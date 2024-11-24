@@ -17,8 +17,6 @@ import (
 	"github.com/aastashov/megalinekg_bot/internal/usecase"
 )
 
-const defaultRequestTimeout = 5 * time.Second
-
 func main() {
 	baseDir, err := os.Getwd()
 	if err != nil {
@@ -32,37 +30,20 @@ func main() {
 	defer cancel()
 
 	// Initialize database
-	connection, err := storage.NewPostgresDB(logger, cnf.Log.GetLevel(), cnf.Database.GetConnectionString())
-	if err != nil {
-		panic(fmt.Errorf("open db: %w", err))
-	}
+	connection := storage.MustNewPostgresDB(logger, cnf.Log.GetLevel(), cnf.Database.GetConnectionString())
+	defer connection.MustClose()
 
-	defer func() {
-		db, err := connection.DB()
-		if err != nil {
-			logger.Error("close db", "error", err)
-			return
-		}
-
-		if err = db.Close(); err != nil {
-			logger.Error("close db", "error", err)
-			return
-		}
-	}()
-
-	if err = storage.Migration(connection); err != nil {
-		panic(fmt.Errorf("migrate db: %w", err))
-	}
+	connection.MustMigration()
 
 	// Initialize storage
-	userStorage := storage.NewUserStorage(connection)
-	accountStorage := storage.NewAccountStorage(connection)
+	userStorage := storage.NewUserStorage(connection.DB)
+	accountStorage := storage.NewAccountStorage(connection.DB)
 
 	// Initialize interaction with MegaLine
-	megaLineConnector := megaline.NewConnector(http.Client{Timeout: defaultRequestTimeout})
+	megaLineConnector := megaline.NewConnector(http.Client{Timeout: cnf.MegaLine.Timeout * time.Second})
 
 	// Initialize use case
-	balanceUseCase := usecase.NewBalanceUseCase(userStorage, accountStorage, megaLineConnector)
+	balanceUseCase := usecase.NewBalanceUseCase(logger, userStorage, accountStorage, megaLineConnector)
 
 	// Initialize interaction with Telegram
 	telegramConnector := telegram.NewConnector(logger, cnf.Telegram.Token, userStorage, balanceUseCase)

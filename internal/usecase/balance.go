@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
@@ -33,13 +34,15 @@ type megaLine interface {
 }
 
 type BalanceUseCase struct {
+	logger         *slog.Logger
 	userStorage    userStorage
 	accountStorage accountStorage
 	megaLine       megaLine
 }
 
-func NewBalanceUseCase(userStorage userStorage, accountStorage accountStorage, megaLine megaLine) *BalanceUseCase {
+func NewBalanceUseCase(logger *slog.Logger, userStorage userStorage, accountStorage accountStorage, megaLine megaLine) *BalanceUseCase {
 	return &BalanceUseCase{
+		logger:         logger.With("use_case", "BalanceUseCase"),
 		userStorage:    userStorage,
 		accountStorage: accountStorage,
 		megaLine:       megaLine,
@@ -47,22 +50,28 @@ func NewBalanceUseCase(userStorage userStorage, accountStorage accountStorage, m
 }
 
 func (uc *BalanceUseCase) UpdateBalance(ctx context.Context, userID int64) error {
+	log := uc.logger.With("method", "UpdateBalance", "user_id", userID)
+
 	user, _, err := uc.userStorage.GetOrCreateByTelegramID(ctx, userID)
 	if err != nil {
+		log.Error("get user by telegram ID", "error", err)
 		return fmt.Errorf("get user by telegram ID: %w", err)
 	}
 
 	if user.AuthUsername == "" || user.AuthPassword == "" {
+		log.Error("user not authorized")
 		return errors.New("user not authorized")
 	}
 
 	if user.Session == "" {
 		body, sessionID, err := uc.megaLine.Login(ctx, user.AuthUsername, user.AuthPassword)
 		if err != nil {
+			log.Error("login", "error", err, "response.body", string(body))
 			return fmt.Errorf("login: %w", err)
 		}
 
 		if !strings.Contains(string(body), "Лицевой счет №") {
+			log.Error("login failed", "response.body", string(body))
 			return errors.New("login failed")
 		}
 
@@ -70,6 +79,7 @@ func (uc *BalanceUseCase) UpdateBalance(ctx context.Context, userID int64) error
 
 		doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(body)))
 		if err != nil {
+			log.Error("parse login response", "error", err)
 			return fmt.Errorf("parse login response: %w", err)
 		}
 
@@ -79,25 +89,26 @@ func (uc *BalanceUseCase) UpdateBalance(ctx context.Context, userID int64) error
 	}
 
 	if err = uc.userStorage.Save(ctx, user); err != nil {
+		log.Error("save user", "error", err)
 		return fmt.Errorf("save user: %w", err)
 	}
 
 	for _, account := range user.Accounts {
 		body, err := uc.megaLine.GetAccountsDetail(ctx, user.Session, account.Number)
 		if err != nil {
-			fmt.Println("Get account detail failed:", err)
+			log.Error("get account detail", "error", err)
 			continue
 		}
 
 		body, err = uc.megaLine.GetAccountsDetail(ctx, user.Session, account.Number)
 		if err != nil {
-			fmt.Println("Get account detail failed:", err)
+			log.Error("get account detail", "error", err, "response.body", string(body))
 			continue
 		}
 
 		doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(body)))
 		if err != nil {
-			fmt.Println("Parse account detail failed:", err)
+			log.Error("parse account detail", "error", err)
 			continue
 		}
 
@@ -112,7 +123,7 @@ func (uc *BalanceUseCase) UpdateBalance(ctx context.Context, userID int64) error
 
 					balanceFloat, err := strconv.ParseFloat(strings.TrimSpace(balance), 64)
 					if err != nil {
-						fmt.Println("Parse balance failed:", err)
+						log.Error("Parse balance failed", "error", err, "balance", balance)
 						return
 					}
 
@@ -124,13 +135,13 @@ func (uc *BalanceUseCase) UpdateBalance(ctx context.Context, userID int64) error
 					matches := dateRe.FindAllStringSubmatch(period, -1)
 
 					if len(matches) != 2 {
-						fmt.Println("Parse period failed")
+						log.Error("Parse period failed", "period", period)
 						return
 					}
 
 					parsedDate, err := time.Parse("02.01.2006", matches[0][0])
 					if err != nil {
-						fmt.Println("Parse period failed:", err)
+						log.Error("Parse period failed", "error", err, "period", period)
 						return
 					}
 
@@ -138,7 +149,7 @@ func (uc *BalanceUseCase) UpdateBalance(ctx context.Context, userID int64) error
 
 					parsedDate, err = time.Parse("02.01.2006", matches[1][0])
 					if err != nil {
-						fmt.Println("Parse period failed:", err)
+						log.Error("Parse period failed", "error", err, "period", period)
 						return
 					}
 
@@ -152,7 +163,7 @@ func (uc *BalanceUseCase) UpdateBalance(ctx context.Context, userID int64) error
 
 					paymentInt, err := strconv.Atoi(strings.TrimSpace(payment))
 					if err != nil {
-						fmt.Println("Parse payment failed:", err)
+						log.Error("Parse payment failed", "error", err, "payment", payment)
 						return
 					}
 
@@ -162,7 +173,7 @@ func (uc *BalanceUseCase) UpdateBalance(ctx context.Context, userID int64) error
 		})
 
 		if err = uc.accountStorage.Save(ctx, &account); err != nil {
-			fmt.Println("Save account failed:", err)
+			log.Error("save account", "error", err)
 			continue
 		}
 	}

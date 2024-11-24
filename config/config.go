@@ -3,12 +3,14 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
 type Config struct {
 	Database Database `yaml:"database"`
+	MegaLine MegaLine `yaml:"megaline"`
 	Telegram Telegram `yaml:"telegram"`
 	Log      Log      `yaml:"log"`
 }
@@ -29,6 +31,10 @@ func (db Database) GetConnectionURL() string {
 // GetConnectionString returns the Connection String or Key-Value Connection String for the database
 func (db Database) GetConnectionString() string {
 	return fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=disable", db.Host, db.User, db.Password, db.Name, db.Port)
+}
+
+type MegaLine struct {
+	Timeout time.Duration `yaml:"timeout"`
 }
 
 type Telegram struct {
