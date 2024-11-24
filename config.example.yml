@@ -5,8 +5,11 @@ database:
   password: postgres
   name: megaline
 
+megaline:
+  timeout: 10s
+
 telegram:
   token: ""
 
 log:
-  level: "info"
+  level: "warn"

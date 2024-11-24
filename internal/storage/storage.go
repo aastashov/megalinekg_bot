@@ -15,13 +15,13 @@ type Storage struct {
 	DB *gorm.DB
 }
 
-func MustNewPostgresDB(logger *slog.Logger, logLevel slog.Level, connectionString string) *Storage {
+func MustNewPostgresDB(logger *slog.Logger, connectionString string) *Storage {
 	gormLogger := slogGorm.New(
 		slogGorm.WithHandler(logger.Handler()),
 		slogGorm.WithTraceAll(),
 		slogGorm.SetLogLevel(slogGorm.ErrorLogType, slog.LevelError),
 		slogGorm.SetLogLevel(slogGorm.SlowQueryLogType, slog.LevelWarn),
-		slogGorm.SetLogLevel(slogGorm.DefaultLogType, logLevel),
+		slogGorm.SetLogLevel(slogGorm.DefaultLogType, slog.LevelInfo),
 	)
 
 	db, err := gorm.Open(postgres.Open(connectionString), &gorm.Config{Logger: gormLogger})

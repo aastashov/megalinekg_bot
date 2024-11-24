@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 
 	"gorm.io/gorm"
 
@@ -34,5 +35,14 @@ func (s *UserStorage) Save(ctx context.Context, user *model.User) error {
 }
 
 func (s *UserStorage) DeleteByTelegramID(ctx context.Context, userID int64) error {
-	return s.db.WithContext(ctx).Where("telegram_id = ?", userID).Delete(&model.User{}).Error
+	subQuery := s.db.Model(&model.User{}).Select("id").Where("telegram_id = ?", userID)
+	if err := s.db.Where("user_id IN (?)", subQuery).Delete(&model.Account{}).Error; err != nil {
+		return fmt.Errorf("delete accounts: %w", err)
+	}
+
+	if err := s.db.WithContext(ctx).Where("telegram_id = ?", userID).Delete(&model.User{}).Error; err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+
+	return nil
 }

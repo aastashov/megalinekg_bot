@@ -30,7 +30,7 @@ func main() {
 	defer cancel()
 
 	// Initialize database
-	connection := storage.MustNewPostgresDB(logger, cnf.Log.GetLevel(), cnf.Database.GetConnectionString())
+	connection := storage.MustNewPostgresDB(logger, cnf.Database.GetConnectionString())
 	defer connection.MustClose()
 
 	connection.MustMigration()
@@ -47,5 +47,7 @@ func main() {
 
 	// Initialize interaction with Telegram
 	telegramConnector := telegram.NewConnector(logger, cnf.Telegram.Token, userStorage, balanceUseCase)
+
+	logger.Info("Starting Telegram bot")
 	telegramConnector.Start(ctx)
 }
